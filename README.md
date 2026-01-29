@@ -106,7 +106,7 @@ GET /api/condonaciones/{id_credito}
 
 **Ejemplo:**
 ```bash
-curl -H "X-API-Key: E3vODwWuuy8iVHO40B-kCossg3IV9lkpsP2fsXyxTV8" \
+curl -H "X-API-Key: APIKEY" \
      http://localhost:8000/api/condonaciones/12345
 ```
 
@@ -167,7 +167,7 @@ GET /api/condonaciones/{id_credito}/solo-condonados
 
 **Ejemplo:**
 ```bash
-curl -H "X-API-Key: E3vODwWuuy8iVHO40B-kCossg3IV9lkpsP2fsXyxTV8" \
+curl -H "X-API-Key: APIKEY" \
      http://localhost:8000/api/condonaciones/12345/solo-condonados
 ```
 
@@ -181,7 +181,7 @@ GET /api/condonaciones/{id_credito}/pendientes
 
 **Ejemplo:**
 ```bash
-curl -H "X-API-Key: E3vODwWuuy8iVHO40B-kCossg3IV9lkpsP2fsXyxTV8" \
+curl -H "X-API-Key: APIKEY" \
      http://localhost:8000/api/condonaciones/12345/pendientes
 ```
 
@@ -268,7 +268,7 @@ curl -H "X-API-Key: tu-api-key" http://localhost:8000/api/condonaciones/12345
 ### Desde PHP:
 
 ```php
-$api_key = "E3vODwWuuy8iVHO40B-kCossg3IV9lkpsP2fsXyxTV8";
+$api_key = "APIKEY";
 $id_credito = 12345;
 $url = "http://localhost:8000/api/condonaciones/" . $id_credito;
 
@@ -382,7 +382,7 @@ Esta API puede ser consumida desde tu aplicación PHP existente usando cURL o Gu
 
 ```php
 <?php
-$api_key = "E3vODwWuuy8iVHO40B-kCossg3IV9lkpsP2fsXyxTV8";
+$api_key = "APIKEY";
 $id_credito = 12345;
 $url = "http://localhost:8000/api/condonaciones/" . $id_credito;
 
