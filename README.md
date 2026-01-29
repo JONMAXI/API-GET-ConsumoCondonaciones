@@ -3,7 +3,7 @@
 
 API desarrollada en Python con FastAPI para la gestión de condonaciones de crédito.
 
-## 🚀 Características
+##  Características
 
 - **FastAPI**: Framework moderno y rápido para construir APIs
 - **Validación automática**: Usando Pydantic
@@ -11,13 +11,13 @@ API desarrollada en Python con FastAPI para la gestión de condonaciones de cré
 - **Múltiples endpoints**: Consulta todos, solo condonados, o pendientes
 - **Manejo de errores**: Respuestas estructuradas
 
-## 📋 Requisitos
+##  Requisitos
 
 - Python 3.8 o superior
 - MySQL/MariaDB con las bases de datos:
   - `db-mega-reporte` (contiene tbl_segundometro_semana y gastos_cobranza)
 
-## 🔧 Instalación
+##  Instalación
 
 ### 1. Crear entorno virtual
 
@@ -63,7 +63,7 @@ DB_DATABASE=db-mega-reporte
 DB_SEGUNDOMETRO=segundometro
 ```
 
-## ▶️ Ejecución
+##  Ejecución
 
 ### Modo desarrollo
 
@@ -79,16 +79,16 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 La API estará disponible en: `http://localhost:8000`
 
-## 📚 Documentación
+##  Documentación
 
 Una vez iniciada la API, accede a:
 
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 
-## 🔌 Endpoints
+##  Endpoints
 
-### 🔐 Autenticación
+###  Autenticación
 
 **Todos los endpoints requieren un API Key válido en el header:**
 
@@ -185,7 +185,7 @@ curl -H "X-API-Key: APIKEY" \
      http://localhost:8000/api/condonaciones/12345/pendientes
 ```
 
-## 📊 Estructura del Proyecto
+##  Estructura del Proyecto
 
 ```
 api_python/
@@ -211,7 +211,7 @@ api_python/
     └── validations.py    # Validaciones de negocio
 ```
 
-## 🗄️ Estructura de Datos
+##  Estructura de Datos
 
 ### Base de datos: `db-mega-reporte`
 
@@ -229,7 +229,7 @@ Contiene los detalles de gastos de cobranza con los siguientes campos:
 - `condonado` (0 o 1)
 - `fecha_condonacion`
 
-## 🛠️ Tecnologías Utilizadas
+##  Tecnologías Utilizadas
 
 - **FastAPI**: Framework web
 - **Pydantic**: Validación de datos
@@ -237,7 +237,7 @@ Contiene los detalles de gastos de cobranza con los siguientes campos:
 - **Uvicorn**: Servidor ASGI
 - **Python-dotenv**: Manejo de variables de entorno
 
-## 🔐 Seguridad
+##  Seguridad
 
 La API está protegida con **API Keys**:
 
@@ -294,7 +294,7 @@ $data = json_decode($response, true);
 ```
 Status: `401 Unauthorized`
 
-## ⚠️ Manejo de Errores
+##  Manejo de Errores
 
 La API retorna códigos de estado HTTP estándar:
 
@@ -362,7 +362,7 @@ La API retorna códigos de estado HTTP estándar:
 }
 ```
 
-## 🔐 Seguridad
+##  Seguridad
 
 - ✅ Autenticación mediante API Keys
 - ✅ Las credenciales de base de datos se manejan mediante variables de entorno
@@ -370,13 +370,13 @@ La API retorna códigos de estado HTTP estándar:
 - ✅ Uso de prepared statements para prevenir SQL injection
 - ✅ Control de acceso por cliente mediante API Keys únicas
 
-## 📝 Notas
+##  Notas
 
 - Asegúrate de que las bases de datos estén accesibles desde el servidor de la API
 - Los nombres de las bases de datos deben coincidir con tu configuración de MySQL
 - La API usa conexiones con context managers para asegurar el cierre apropiado de conexiones
 
-## 🤝 Integración con PHP
+##  Integración con PHP
 
 Esta API puede ser consumida desde tu aplicación PHP existente usando cURL o Guzzle:
 
@@ -412,7 +412,7 @@ if ($http_code === 200) {
 ?>
 ```
 
-## 📞 Soporte
+##  Soporte
 
 Para problemas o preguntas, consulta la documentación interactiva en `/docs` o contacta al equipo de desarrollo.
 
