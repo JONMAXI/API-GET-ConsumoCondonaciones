@@ -338,3 +338,141 @@ async def get_pendientes_condonacion(
             status_code=500,
             detail=f"Error interno del servidor: {str(e)}"
         )
+@router.get(
+    "/condonaciones/{id_credito}/general",
+    responses={
+        200: {"description": "Éxito - Datos obtenidos correctamente"},
+        400: {"description": "Bad Request - ID inválido o mal formado"},
+        401: {"description": "No Autenticado - API Key inválida o faltante"},
+        404: {"description": "No Encontrado - Crédito no existe"},
+        500: {"description": "Error del Servidor - Error interno"}
+    },
+    summary="Obtener información general con STATUS",
+    description="Retorna TODOS los gastos (condonados y pendientes) con un campo STATUS que indica 'CONDONADO' o 'PENDIENTE'"
+)
+async def get_general(
+    id_credito: int = Path(..., description="ID del crédito a consultar", gt=0),
+    api_key: str = Security(verify_api_key)
+):
+    """
+    Endpoint GENERAL que muestra toda la información con STATUS (PENDIENTE/CONDONADO)
+    
+    - **id_credito**: ID del crédito a consultar
+    
+    Retorna:
+    - **datos_generales**: Información del cliente y crédito
+    - **resumen**: Totales de registros condonados y pendientes
+    - **detalle**: Lista completa con campo STATUS incluido
+    """
+    
+    try:
+        # Validar ID de crédito
+        validar_id_credito(id_credito)
+        
+        # 1. Obtener datos generales del cliente
+        with get_db_connection(database="db-mega-reporte") as conn:
+            with conn.cursor() as cursor:
+                query_datos_generales = """
+                    SELECT 
+                        Id_credito as id_credito,
+                        Nombre_cliente as nombre_cliente,
+                        Id_cliente as id_cliente,
+                        Domicilio_Completo as domicilio_completo,
+                        Bucket_Morosidad_Real as bucket_morosidad,
+                        Dias_mora as dias_mora,
+                        saldo_vencido_inicio as saldo_vencido
+                    FROM tbl_segundometro_semana
+                    WHERE Id_credito = %s
+                    LIMIT 1
+                """
+                
+                cursor.execute(query_datos_generales, (id_credito,))
+                datos_generales_row = cursor.fetchone()
+                
+                # Validar que se encontraron datos
+                validar_datos_encontrados(datos_generales_row, 'cliente', id_credito)
+                
+                # Convertir a diccionario con tipos correctos
+                datos_generales = {
+                    "id_credito": datos_generales_row['id_credito'],
+                    "nombre_cliente": datos_generales_row['nombre_cliente'],
+                    "id_cliente": datos_generales_row['id_cliente'],
+                    "domicilio_completo": datos_generales_row['domicilio_completo'],
+                    "bucket_morosidad": datos_generales_row['bucket_morosidad'],
+                    "dias_mora": datos_generales_row['dias_mora'],
+                    "saldo_vencido": float(datos_generales_row['saldo_vencido']) if datos_generales_row['saldo_vencido'] else 0
+                }
+        
+        # 2. Obtener TODOS los gastos con STATUS
+        with get_db_connection(database="db-mega-reporte") as conn:
+            with conn.cursor() as cursor:
+                query_gastos = """
+                    SELECT 
+                        periodo_inicio as periodoinicio,
+                        periodo_fin as periodofin,
+                        SEMANA as semana,
+                        parcialidad,
+                        monto_valor,
+                        cuota,
+                        condonado,
+                        fecha_condonacion,
+                        CASE 
+                            WHEN condonado = 1 THEN 'CONDONADO'
+                            ELSE 'PENDIENTE'
+                        END as status
+                    FROM gastos_cobranza
+                    WHERE Id_credito = %s
+                    ORDER BY periodo_inicio ASC
+                """
+                
+                cursor.execute(query_gastos, (id_credito,))
+                gastos_rows = cursor.fetchall()
+                
+                # Procesar cada gasto
+                detalles = []
+                for row in gastos_rows:
+                    detalle = {
+                        "periodoinicio": row['periodoinicio'].strftime("%Y-%m-%d") if row['periodoinicio'] else None,
+                        "periodofin": row['periodofin'].strftime("%Y-%m-%d") if row['periodofin'] else None,
+                        "semana": row['semana'],
+                        "parcialidad": row['parcialidad'],
+                        "monto_valor": float(row['monto_valor']) if row['monto_valor'] else 0,
+                        "cuota": float(row['cuota']) if row['cuota'] else 0,
+                        "condonado": row['condonado'],
+                        "fecha_condonacion": row['fecha_condonacion'].strftime("%Y-%m-%d %H:%M:%S") if row['fecha_condonacion'] else None,
+                        "status": row['status']  # ← NUEVO CAMPO
+                    }
+                    detalles.append(detalle)
+        
+        # 3. Calcular resumen
+        total_registros = len(detalles)
+        condonados = sum(1 for d in detalles if d['condonado'] == 1)
+        pendientes = total_registros - condonados
+        
+        # 4. Construir respuesta
+        return {
+            "status_code": 200,
+            "status_message": "OK",
+            "success": True,
+            "mensaje": f"Se encontraron {total_registros} registros",
+            "datos_generales": datos_generales,
+            "resumen": {
+                "total_registros": total_registros,
+                "condonados": condonados,
+                "pendientes": pendientes
+            },
+            "detalle": detalles
+        }
+        
+    except HTTPException:
+        raise
+    except pymysql.Error as db_error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error de base de datos: {str(db_error)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno del servidor: {str(e)}"
+        )

@@ -18,6 +18,7 @@ class DetalleCondonacion(BaseModel):
     cuota: Optional[float] = Field(None, description="Cuota")
     condonado: Optional[int] = Field(None, description="Marca si está condonado (0 o 1)")
     fecha_condonacion: Optional[datetime] = Field(None, description="Fecha de condonación")
+    status: Optional[str] = Field(None, description="Estatus del gasto: CONDONADO o PENDIENTE")
     
     class Config:
         json_schema_extra = {
@@ -29,7 +30,8 @@ class DetalleCondonacion(BaseModel):
                 "monto_valor": 150.50,
                 "cuota": 150.00,
                 "condonado": 1,
-                "fecha_condonacion": "2026-01-28T10:30:00"
+                "fecha_condonacion": "2026-01-28T10:30:00",
+                "status": "CONDONADO"
             }
         }
 
@@ -143,5 +145,82 @@ class ErrorResponse(BaseModel):
                 "success": False,
                 "mensaje": "No se encontraron datos para el crédito",
                 "error": None
+            }
+        }
+
+        
+class ResumenGeneral(BaseModel):
+    """Modelo para el resumen estadístico del endpoint general"""
+    
+    total_registros: int = Field(..., description="Total de registros encontrados")
+    condonados: int = Field(..., description="Total de registros condonados")
+    pendientes: int = Field(..., description="Total de registros pendientes")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "total_registros": 5,
+                "condonados": 2,
+                "pendientes": 3
+            }
+        }
+
+
+class ResponseGeneral(BaseModel):
+    """Modelo de respuesta para el endpoint general con STATUS"""
+    
+    status_code: int = Field(200, description="Código HTTP de respuesta")
+    status_message: str = Field("OK", description="Significado del código HTTP")
+    success: bool = Field(True, description="Indica si la operación fue exitosa")
+    mensaje: str = Field("", description="Mensaje de respuesta")
+    datos_generales: DatosGenerales = Field(..., description="Datos generales del cliente")
+    resumen: ResumenGeneral = Field(..., description="Resumen estadístico")
+    detalle: List[DetalleCondonacion] = Field(..., description="Lista completa de gastos con STATUS")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "status_code": 200,
+                "status_message": "OK",
+                "success": True,
+                "mensaje": "Se encontraron 5 registros",
+                "datos_generales": {
+                    "id_credito": 12345,
+                    "nombre_cliente": "Juan Pérez García",
+                    "id_cliente": 67890,
+                    "domicilio_completo": "Calle Principal #123",
+                    "bucket_morosidad": "B2",
+                    "dias_mora": 15,
+                    "saldo_vencido": 3500.00
+                },
+                "resumen": {
+                    "total_registros": 5,
+                    "condonados": 2,
+                    "pendientes": 3
+                },
+                "detalle": [
+                    {
+                        "periodoinicio": "2026-01-01",
+                        "periodofin": "2026-01-07",
+                        "semana": "2026-01",
+                        "parcialidad": "1/52",
+                        "monto_valor": 150.50,
+                        "cuota": 150.00,
+                        "condonado": 1,
+                        "fecha_condonacion": "2026-01-28T10:30:00",
+                        "status": "CONDONADO"
+                    },
+                    {
+                        "periodoinicio": "2026-01-08",
+                        "periodofin": "2026-01-14",
+                        "semana": "2026-02",
+                        "parcialidad": "2/52",
+                        "monto_valor": 150.50,
+                        "cuota": 150.00,
+                        "condonado": 0,
+                        "fecha_condonacion": None,
+                        "status": "PENDIENTE"
+                    }
+                ]
             }
         }
