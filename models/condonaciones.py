@@ -148,7 +148,7 @@ class ErrorResponse(BaseModel):
             }
         }
 
-        
+
 class ResumenGeneral(BaseModel):
     """Modelo para el resumen estadístico del endpoint general"""
     
@@ -222,5 +222,32 @@ class ResponseGeneral(BaseModel):
                         "status": "PENDIENTE"
                     }
                 ]
+            }
+        }
+
+
+# ─── ResumenSimple ────────────────────────────────────────────────────────────
+
+class ResumenSimpleResponse(BaseModel):
+    """Modelo de respuesta para el endpoint ResumenSimple — solo totales, sin detalle"""
+
+    status_code: int = Field(200, description="Código HTTP de respuesta")
+    status_message: str = Field("OK", description="Significado del código HTTP")
+    id_credito: Optional[int] = Field(None, description="ID del crédito consultado")
+    total_parcialidades: int = Field(..., description="Total de registros (parcialidades) encontrados")
+    monto_total: float = Field(..., description="Suma de monto_valor de todos los registros")
+    condonados: int = Field(..., description="Cantidad de registros condonados")
+    pendientes: int = Field(..., description="Cantidad de registros pendientes")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "status_code": 200,
+                "status_message": "OK",
+                "id_credito": 1600,
+                "total_parcialidades": 5,
+                "monto_total": 1250.00,
+                "condonados": 0,
+                "pendientes": 5
             }
         }

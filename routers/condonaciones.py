@@ -12,7 +12,8 @@ from models.condonaciones import (
     ErrorResponse,
     DatosGenerales,
     CondonacionCobranza,
-    DetalleCondonacion
+    DetalleCondonacion,
+    ResumenSimpleResponse
 )
 from config.database import get_db_connection
 from config.security import verify_api_key
@@ -38,21 +39,9 @@ async def get_condonacion_por_credito(
     id_credito: int = Path(..., description="ID del crédito a consultar", gt=0),
     api_key: str = Security(verify_api_key)
 ):
-    """
-    Obtiene información completa de condonación para un crédito específico.
-    
-    - **id_credito**: ID del crédito a consultar
-    
-    Retorna:
-    - **datos_generales**: Información del cliente y crédito
-    - **condonacion_cobranza**: Lista de detalles de gastos de cobranza
-    """
-    
     try:
-        # Validar ID de crédito
         validar_id_credito(id_credito)
         
-        # Obtener datos generales del cliente desde tbl_segundometro_semana
         with get_db_connection(database="db-mega-reporte") as conn:
             with conn.cursor() as cursor:
                 query_datos_generales = """
@@ -68,17 +57,11 @@ async def get_condonacion_por_credito(
                     WHERE Id_credito = %s
                     LIMIT 1
                 """
-                
                 cursor.execute(query_datos_generales, (id_credito,))
                 datos_generales_row = cursor.fetchone()
-                
-                # Validar que se encontraron datos
                 validar_datos_encontrados(datos_generales_row, 'cliente', id_credito)
-                
-                # Convertir a modelo Pydantic
                 datos_generales = DatosGenerales(**datos_generales_row)
         
-        # Obtener gastos de cobranza desde db-mega-reporte (solo condonados)
         with get_db_connection(database="db-mega-reporte") as conn:
             with conn.cursor() as cursor:
                 query_gastos = """
@@ -96,18 +79,13 @@ async def get_condonacion_por_credito(
                       AND condonado = 1
                     ORDER BY periodo_inicio ASC
                 """
-                
                 cursor.execute(query_gastos, (id_credito,))
                 detalles_rows = cursor.fetchall()
-                
-                # Convertir a modelos Pydantic (puede estar vacío si no hay condonados)
                 detalles = [DetalleCondonacion(**row) for row in detalles_rows]
-                
                 condonacion_cobranza = CondonacionCobranza(detalle=detalles)
         
-        # Construir respuesta
         mensaje = f"Se encontraron {len(detalles)} gastos condonados" if detalles else "No hay gastos condonados para este crédito"
-        response = CondonacionResponse(
+        return CondonacionResponse(
             status_code=200,
             status_message="OK",
             success=True,
@@ -116,20 +94,12 @@ async def get_condonacion_por_credito(
             condonacion_cobranza=condonacion_cobranza
         )
         
-        return response
-        
     except HTTPException:
         raise
     except pymysql.Error as db_error:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error de base de datos: {str(db_error)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error de base de datos: {str(db_error)}")
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get(
@@ -149,19 +119,9 @@ async def get_solo_condonados(
     id_credito: int = Path(..., description="ID del crédito a consultar", gt=0),
     api_key: str = Security(verify_api_key)
 ):
-    """
-    Obtiene información de condonación mostrando solo los gastos ya condonados.
-    
-    - **id_credito**: ID del crédito a consultar
-    
-    Retorna solo los registros donde condonado = 1
-    """
-    
     try:
-        # Validar ID de crédito
         validar_id_credito(id_credito)
         
-        # Obtener datos generales
         with get_db_connection(database="db-mega-reporte") as conn:
             with conn.cursor() as cursor:
                 query_datos_generales = """
@@ -177,16 +137,11 @@ async def get_solo_condonados(
                     WHERE Id_credito = %s
                     LIMIT 1
                 """
-                
                 cursor.execute(query_datos_generales, (id_credito,))
                 datos_generales_row = cursor.fetchone()
-                
-                # Validar que se encontraron datos
                 validar_datos_encontrados(datos_generales_row, 'cliente', id_credito)
-                
                 datos_generales = DatosGenerales(**datos_generales_row)
         
-        # Obtener solo gastos condonados
         with get_db_connection(database="db-mega-reporte") as conn:
             with conn.cursor() as cursor:
                 query_gastos = """
@@ -204,14 +159,12 @@ async def get_solo_condonados(
                       AND condonado = 1
                     ORDER BY periodo_inicio ASC
                 """
-                
                 cursor.execute(query_gastos, (id_credito,))
                 detalles_rows = cursor.fetchall()
-                
                 detalles = [DetalleCondonacion(**row) for row in detalles_rows]
                 condonacion_cobranza = CondonacionCobranza(detalle=detalles)
         
-        response = CondonacionResponse(
+        return CondonacionResponse(
             status_code=200,
             status_message="OK",
             success=True,
@@ -220,20 +173,12 @@ async def get_solo_condonados(
             condonacion_cobranza=condonacion_cobranza
         )
         
-        return response
-        
     except HTTPException:
         raise
     except pymysql.Error as db_error:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error de base de datos: {str(db_error)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error de base de datos: {str(db_error)}")
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get(
@@ -253,19 +198,9 @@ async def get_pendientes_condonacion(
     id_credito: int = Path(..., description="ID del crédito a consultar", gt=0),
     api_key: str = Security(verify_api_key)
 ):
-    """
-    Obtiene información mostrando solo los gastos pendientes de condonación.
-    
-    - **id_credito**: ID del crédito a consultar
-    
-    Retorna solo los registros donde condonado IS NULL o condonado = 0
-    """
-    
     try:
-        # Validar ID de crédito
         validar_id_credito(id_credito)
         
-        # Obtener datos generales
         with get_db_connection(database="db-mega-reporte") as conn:
             with conn.cursor() as cursor:
                 query_datos_generales = """
@@ -281,16 +216,11 @@ async def get_pendientes_condonacion(
                     WHERE Id_credito = %s
                     LIMIT 1
                 """
-                
                 cursor.execute(query_datos_generales, (id_credito,))
                 datos_generales_row = cursor.fetchone()
-                
-                # Validar que se encontraron datos
                 validar_datos_encontrados(datos_generales_row, 'cliente', id_credito)
-                
                 datos_generales = DatosGenerales(**datos_generales_row)
         
-        # Obtener solo gastos pendientes
         with get_db_connection(database="db-mega-reporte") as conn:
             with conn.cursor() as cursor:
                 query_gastos = """
@@ -308,14 +238,12 @@ async def get_pendientes_condonacion(
                       AND (condonado IS NULL OR condonado = 0)
                     ORDER BY periodo_inicio ASC
                 """
-                
                 cursor.execute(query_gastos, (id_credito,))
                 detalles_rows = cursor.fetchall()
-                
                 detalles = [DetalleCondonacion(**row) for row in detalles_rows]
                 condonacion_cobranza = CondonacionCobranza(detalle=detalles)
         
-        response = CondonacionResponse(
+        return CondonacionResponse(
             status_code=200,
             status_message="OK",
             success=True,
@@ -324,20 +252,14 @@ async def get_pendientes_condonacion(
             condonacion_cobranza=condonacion_cobranza
         )
         
-        return response
-        
     except HTTPException:
         raise
     except pymysql.Error as db_error:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error de base de datos: {str(db_error)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error de base de datos: {str(db_error)}")
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
+
 @router.get(
     "/condonaciones/{id_credito}/general",
     responses={
@@ -354,22 +276,9 @@ async def get_general(
     id_credito: int = Path(..., description="ID del crédito a consultar", gt=0),
     api_key: str = Security(verify_api_key)
 ):
-    """
-    Endpoint GENERAL que muestra toda la información con STATUS (PENDIENTE/CONDONADO)
-    
-    - **id_credito**: ID del crédito a consultar
-    
-    Retorna:
-    - **datos_generales**: Información del cliente y crédito
-    - **resumen**: Totales de registros condonados y pendientes
-    - **detalle**: Lista completa con campo STATUS incluido
-    """
-    
     try:
-        # Validar ID de crédito
         validar_id_credito(id_credito)
         
-        # 1. Obtener datos generales del cliente
         with get_db_connection(database="db-mega-reporte") as conn:
             with conn.cursor() as cursor:
                 query_datos_generales = """
@@ -385,14 +294,9 @@ async def get_general(
                     WHERE Id_credito = %s
                     LIMIT 1
                 """
-                
                 cursor.execute(query_datos_generales, (id_credito,))
                 datos_generales_row = cursor.fetchone()
-                
-                # Validar que se encontraron datos
                 validar_datos_encontrados(datos_generales_row, 'cliente', id_credito)
-                
-                # Convertir a diccionario con tipos correctos
                 datos_generales = {
                     "id_credito": datos_generales_row['id_credito'],
                     "nombre_cliente": datos_generales_row['nombre_cliente'],
@@ -403,7 +307,6 @@ async def get_general(
                     "saldo_vencido": float(datos_generales_row['saldo_vencido']) if datos_generales_row['saldo_vencido'] else 0
                 }
         
-        # 2. Obtener TODOS los gastos con STATUS
         with get_db_connection(database="db-mega-reporte") as conn:
             with conn.cursor() as cursor:
                 query_gastos = """
@@ -424,14 +327,12 @@ async def get_general(
                     WHERE Id_credito = %s
                     ORDER BY periodo_inicio ASC
                 """
-                
                 cursor.execute(query_gastos, (id_credito,))
                 gastos_rows = cursor.fetchall()
                 
-                # Procesar cada gasto
                 detalles = []
                 for row in gastos_rows:
-                    detalle = {
+                    detalles.append({
                         "periodoinicio": row['periodoinicio'].strftime("%Y-%m-%d") if row['periodoinicio'] else None,
                         "periodofin": row['periodofin'].strftime("%Y-%m-%d") if row['periodofin'] else None,
                         "semana": row['semana'],
@@ -440,16 +341,13 @@ async def get_general(
                         "cuota": float(row['cuota']) if row['cuota'] else 0,
                         "condonado": row['condonado'],
                         "fecha_condonacion": row['fecha_condonacion'].strftime("%Y-%m-%d %H:%M:%S") if row['fecha_condonacion'] else None,
-                        "status": row['status']  # ← NUEVO CAMPO
-                    }
-                    detalles.append(detalle)
+                        "status": row['status']
+                    })
         
-        # 3. Calcular resumen
         total_registros = len(detalles)
         condonados = sum(1 for d in detalles if d['condonado'] == 1)
         pendientes = total_registros - condonados
         
-        # 4. Construir respuesta
         return {
             "status_code": 200,
             "status_message": "OK",
@@ -467,12 +365,82 @@ async def get_general(
     except HTTPException:
         raise
     except pymysql.Error as db_error:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error de base de datos: {str(db_error)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error de base de datos: {str(db_error)}")
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
+
+@router.get(
+    "/condonaciones/{id_credito}/resumen-simple",
+    response_model=ResumenSimpleResponse,
+    responses={
+        200: {"description": "Éxito - Datos obtenidos correctamente"},
+        400: {"description": "Bad Request - ID inválido o mal formado"},
+        401: {"description": "No Autenticado - API Key inválida o faltante"},
+        404: {"description": "No Encontrado - Crédito no existe"},
+        500: {"description": "Error del Servidor - Error interno"}
+    },
+    summary="Resumen simple de gastos de cobranza",
+    description=(
+        "Retorna un resumen con totales calculados: total de parcialidades, "
+        "monto total a condonar (suma de monto_valor), condonados y pendientes. Sin detalle de registros."
+    )
+)
+async def get_resumen_simple(
+    id_credito: int = Path(..., description="ID del crédito a consultar", gt=0),
+    api_key: str = Security(verify_api_key)
+):
+    """
+    Resumen simple de gastos de cobranza — totales calculados, sin lista de registros.
+
+    - **id_credito**: ID del crédito a consultar
+
+    Retorna:
+    - **total_parcialidades**: Conteo total de registros
+    - **monto_total**: Suma de monto_valor de todos los registros
+    - **condonados**: Cantidad con condonado = 1
+    - **pendientes**: Cantidad con condonado = 0 o NULL
+    """
+
+    try:
+        validar_id_credito(id_credito)
+
+        with get_db_connection(database="db-mega-reporte") as conn:
+            with conn.cursor() as cursor:
+
+                # Verificar que el crédito existe
+                cursor.execute(
+                    "SELECT Id_credito FROM tbl_segundometro_semana WHERE Id_credito = %s LIMIT 1",
+                    (id_credito,)
+                )
+                validar_datos_encontrados(cursor.fetchone(), 'cliente', id_credito)
+
+                # Obtener totales directamente desde SQL
+                query_resumen = """
+                    SELECT
+                        COUNT(*)                                    AS total_parcialidades,
+                        COALESCE(SUM(monto_valor), 0)               AS monto_total,
+                        SUM(CASE WHEN condonado = 1 THEN 1 ELSE 0 END) AS condonados,
+                        SUM(CASE WHEN condonado != 1 OR condonado IS NULL THEN 1 ELSE 0 END) AS pendientes
+                    FROM gastos_cobranza
+                    WHERE Id_credito = %s
+                """
+                cursor.execute(query_resumen, (id_credito,))
+                row = cursor.fetchone()
+
+        return ResumenSimpleResponse(
+            status_code=200,
+            status_message="OK",
+            id_credito=id_credito,
+            total_parcialidades=row["total_parcialidades"],
+            monto_total=float(row["monto_total"]),
+            condonados=row["condonados"],
+            pendientes=row["pendientes"]
         )
+
+    except HTTPException:
+        raise
+    except pymysql.Error as db_error:
+        raise HTTPException(status_code=500, detail=f"Error de base de datos: {str(db_error)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
