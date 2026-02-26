@@ -5,7 +5,9 @@ Endpoints para gestión de condonaciones de crédito
 
 from fastapi import APIRouter, HTTPException, Depends, Path, Security
 from typing import Optional
+from datetime import date
 import pymysql
+import httpx
 
 from models.condonaciones import (
     CondonacionResponse,
@@ -20,6 +22,10 @@ from config.security import verify_api_key
 from utils.validations import validar_id_credito, validar_datos_encontrados
 
 router = APIRouter()
+
+# URL y valor fijo de la API externa
+API_EXTERNA_URL = "https://servicios.s2movil.net/s2maxikash/estadocuenta"
+CARGO_PAGO_TARDIO = 250.00
 
 
 @router.get(
@@ -378,12 +384,15 @@ async def get_general(
         400: {"description": "Bad Request - ID inválido o mal formado"},
         401: {"description": "No Autenticado - API Key inválida o faltante"},
         404: {"description": "No Encontrado - Crédito no existe"},
-        500: {"description": "Error del Servidor - Error interno"}
+        500: {"description": "Error del Servidor - Error interno"},
+        502: {"description": "Bad Gateway - Error al consultar API externa"}
     },
     summary="Resumen simple de gastos de cobranza",
     description=(
-        "Retorna un resumen con totales calculados: total de parcialidades, "
-        "monto total a condonar (suma de monto_valor), condonados y pendientes. Sin detalle de registros."
+        "Retorna un resumen con totales calculados combinando datos de nuestra BD "
+        "y la API externa de estado de cuenta (estadocuenta). "
+        "Incluye: total parcialidades, monto total, condonados, pendientes, "
+        "saldo vencido, número de cuotas, cargo por pago tardío y total a pagar."
     )
 )
 async def get_resumen_simple(
@@ -391,51 +400,100 @@ async def get_resumen_simple(
     api_key: str = Security(verify_api_key)
 ):
     """
-    Resumen simple de gastos de cobranza — totales calculados, sin lista de registros.
+    Resumen simple — combina nuestra BD + API externa de estado de cuenta.
 
-    - **id_credito**: ID del crédito a consultar
-
-    Retorna:
-    - **total_parcialidades**: Conteo total de registros
-    - **monto_total**: Suma de monto_valor de todos los registros
-    - **condonados**: Cantidad con condonado = 1
-    - **pendientes**: Cantidad con condonado = 0 o NULL
+    Campos calculados:
+    - **total_parcialidades**: COUNT de registros en gastos_cobranza
+    - **monto_total**: SUM de monto_valor
+    - **condonados**: registros con condonado = 1
+    - **total_cargos_pagos_tardio**: registros pendientes (condonado != 1)
+    - **saldo_vencido_credito**: saldoTotalVencido de la API externa
+    - **numero_cuotas_credito**: cuotasDevengadas - cuotasPagadas de la API externa
+    - **cargo_pago_tardio**: valor fijo de $250.00
+    - **total_a_pagar**: saldoTotalVencido + 250.00
     """
 
     try:
         validar_id_credito(id_credito)
 
+        # ── 1. Validar que el crédito existe y obtener totales de nuestra BD ──
         with get_db_connection(database="db-mega-reporte") as conn:
             with conn.cursor() as cursor:
 
-                # Verificar que el crédito existe
                 cursor.execute(
                     "SELECT Id_credito FROM tbl_segundometro_semana WHERE Id_credito = %s LIMIT 1",
                     (id_credito,)
                 )
                 validar_datos_encontrados(cursor.fetchone(), 'cliente', id_credito)
 
-                # Obtener totales directamente desde SQL
                 query_resumen = """
                     SELECT
-                        COUNT(*)                                    AS total_parcialidades,
-                        COALESCE(SUM(monto_valor), 0)               AS monto_total,
-                        SUM(CASE WHEN condonado = 1 THEN 1 ELSE 0 END) AS condonados,
-                        SUM(CASE WHEN condonado != 1 OR condonado IS NULL THEN 1 ELSE 0 END) AS pendientes
+                        COUNT(*)                                               AS total_parcialidades,
+                        COALESCE(SUM(monto_valor), 0)                          AS monto_total,
+                        SUM(CASE WHEN condonado = 1 THEN 1 ELSE 0 END)         AS condonados,
+                        SUM(CASE WHEN condonado != 1 OR condonado IS NULL
+                                 THEN 1 ELSE 0 END)                            AS pendientes
                     FROM gastos_cobranza
                     WHERE Id_credito = %s
                 """
                 cursor.execute(query_resumen, (id_credito,))
-                row = cursor.fetchone()
+                row_bd = cursor.fetchone()
+
+        # ── 2. Consultar API externa de estado de cuenta ──
+        fecha_corte = date.today().strftime("%Y-%m-%d")
+        payload = {
+            "idCredito": id_credito,
+            "fechaCorte": fecha_corte
+        }
+
+        headers = {
+            "Token": "3oJVoAHtwWn7oBT4o340gFkvq9uWRRmpFo7p",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(API_EXTERNA_URL, json=payload, headers=headers)
+                resp.raise_for_status()
+                data_externa = resp.json()
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=502, detail="Tiempo de espera agotado al consultar la API externa")
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=502, detail=f"Error en la API externa: {e.response.status_code}")
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"No se pudo conectar con la API externa: {str(e)}")
+
+        # ── 3. Extraer datosSaldos ──
+        datos_saldos = (
+            data_externa
+            .get("estadoCuenta", {})
+            .get("datosSaldos", {})
+        )
+
+        if not datos_saldos:
+            raise HTTPException(
+                status_code=502,
+                detail="La API externa no retornó datosSaldos para este crédito"
+            )
+
+        saldo_total_vencido  = float(datos_saldos.get("saldoTotalVencido", 0))
+        cuotas_devengadas    = int(datos_saldos.get("cuotasDevengadas", 0))
+        cuotas_pagadas       = int(datos_saldos.get("cuotasPagadas", 0))
+
+        # ── 4. Calcular campos derivados ──
+        numero_cuotas_credito = cuotas_devengadas - cuotas_pagadas
+        total_a_pagar         = round(float(row_bd["monto_total"]) + saldo_total_vencido, 2)
+        pendientes            = int(row_bd["pendientes"])
 
         return ResumenSimpleResponse(
             status_code=200,
             status_message="OK",
             id_credito=id_credito,
-            total_parcialidades=row["total_parcialidades"],
-            monto_total=float(row["monto_total"]),
-            condonados=row["condonados"],
-            pendientes=row["pendientes"]
+            cargo_pago_tardio=float(row_bd["monto_total"]),
+            total_cargos_pagos_tardio=pendientes,
+            saldo_vencido_credito=saldo_total_vencido,
+            numero_cuotas_credito=numero_cuotas_credito,
+            total_a_pagar=total_a_pagar
         )
 
     except HTTPException:

@@ -229,15 +229,23 @@ class ResponseGeneral(BaseModel):
 # ─── ResumenSimple ────────────────────────────────────────────────────────────
 
 class ResumenSimpleResponse(BaseModel):
-    """Modelo de respuesta para el endpoint ResumenSimple — solo totales, sin detalle"""
+    """
+    Modelo de respuesta para el endpoint ResumenSimple.
+    Combina totales de nuestra BD + datos calculados desde la API externa (estadocuenta).
+    """
 
     status_code: int = Field(200, description="Código HTTP de respuesta")
     status_message: str = Field("OK", description="Significado del código HTTP")
     id_credito: Optional[int] = Field(None, description="ID del crédito consultado")
-    total_parcialidades: int = Field(..., description="Total de registros (parcialidades) encontrados")
-    monto_total: float = Field(..., description="Suma de monto_valor de todos los registros")
-    condonados: int = Field(..., description="Cantidad de registros condonados")
-    pendientes: int = Field(..., description="Cantidad de registros pendientes")
+
+    # ── Campos de nuestra BD (gastos_cobranza) ──
+    cargo_pago_tardio: float = Field(..., description="Suma de monto_valor de todos los registros (antes: monto_total)")
+
+    # ── Campos calculados / API externa ──
+    total_cargos_pagos_tardio: int = Field(..., description="Total de registros pendientes de condonación")
+    saldo_vencido_credito: float = Field(..., description="saldoTotalVencido obtenido de la API externa")
+    numero_cuotas_credito: int = Field(..., description="cuotasDevengadas - cuotasPagadas de la API externa")
+    total_a_pagar: float = Field(..., description="saldoTotalVencido + cargo_pago_tardio (250)")
 
     class Config:
         json_schema_extra = {
@@ -245,9 +253,10 @@ class ResumenSimpleResponse(BaseModel):
                 "status_code": 200,
                 "status_message": "OK",
                 "id_credito": 1600,
-                "total_parcialidades": 5,
-                "monto_total": 1250.00,
-                "condonados": 0,
-                "pendientes": 5
+                "cargo_pago_tardio": 1250.00,
+                "total_cargos_pagos_tardio": 5,
+                "saldo_vencido_credito": 672.82,
+                "numero_cuotas_credito": 1,
+                "total_a_pagar": 922.82
             }
         }
