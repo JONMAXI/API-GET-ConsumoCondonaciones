@@ -246,6 +246,7 @@ class ResumenSimpleResponse(BaseModel):
     saldo_vencido_credito: float = Field(..., description="saldoTotalVencido obtenido de la API externa")
     numero_cuotas_credito: int = Field(..., description="cuotasDevengadas - cuotasPagadas de la API externa")
     total_a_pagar: float = Field(..., description="saldoTotalVencido + cargo_pago_tardio (250)")
+    bandera: int = Field(..., description="0 = sin datos (total_cargos_pagos_tardio es 0), 1 = tiene datos")
 
     class Config:
         json_schema_extra = {
@@ -257,6 +258,7 @@ class ResumenSimpleResponse(BaseModel):
                 "total_cargos_pagos_tardio": 5,
                 "saldo_vencido_credito": 672.82,
                 "numero_cuotas_credito": 1,
-                "total_a_pagar": 922.82
+                "total_a_pagar": 922.82,
+                "bandera": 1
             }
         }

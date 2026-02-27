@@ -476,24 +476,26 @@ async def get_resumen_simple(
                 detail="La API externa no retornó datosSaldos para este crédito"
             )
 
-        saldo_total_vencido  = float(datos_saldos.get("saldoTotalVencido", 0))
-        cuotas_devengadas    = int(datos_saldos.get("cuotasDevengadas", 0))
-        cuotas_pagadas       = int(datos_saldos.get("cuotasPagadas", 0))
+        saldo_total_vencido  = float(datos_saldos.get("saldoTotalVencido") or 0)
+        cuotas_devengadas    = int(datos_saldos.get("cuotasDevengadas") or 0)
+        cuotas_pagadas       = int(datos_saldos.get("cuotasPagadas") or 0)
 
         # ── 4. Calcular campos derivados ──
         numero_cuotas_credito = cuotas_devengadas - cuotas_pagadas
-        total_a_pagar         = round(float(row_bd["monto_total"]) + saldo_total_vencido, 2)
-        pendientes            = int(row_bd["pendientes"])
+        monto_total           = float(row_bd["monto_total"] or 0)
+        pendientes            = int(row_bd["pendientes"] or 0)
+        total_a_pagar         = round(monto_total + saldo_total_vencido, 2)
 
         return ResumenSimpleResponse(
             status_code=200,
             status_message="OK",
             id_credito=id_credito,
-            cargo_pago_tardio=float(row_bd["monto_total"]),
+            cargo_pago_tardio=monto_total,
             total_cargos_pagos_tardio=pendientes,
             saldo_vencido_credito=saldo_total_vencido,
             numero_cuotas_credito=numero_cuotas_credito,
-            total_a_pagar=total_a_pagar
+            total_a_pagar=total_a_pagar,
+            bandera=1 if pendientes > 0 else 0
         )
 
     except HTTPException:
