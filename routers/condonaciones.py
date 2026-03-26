@@ -427,14 +427,39 @@ async def get_resumen_simple(
                 validar_datos_encontrados(cursor.fetchone(), 'cliente', id_credito)
 
                 query_resumen = """
-                    SELECT
-                        COUNT(*)                                               AS total_parcialidades,
-                        COALESCE(SUM(monto_valor), 0)                          AS monto_total,
-                        SUM(CASE WHEN condonado = 1 THEN 1 ELSE 0 END)         AS condonados,
-                        SUM(CASE WHEN condonado != 1 OR condonado IS NULL
-                                 THEN 1 ELSE 0 END)                            AS pendientes
-                    FROM gastos_cobranza
-                    WHERE Id_credito = %s
+                     SELECT
+                     COUNT(*) AS total_parcialidades,
+                 
+                     COALESCE(
+                         SUM(
+                             CASE 
+                                 WHEN condonado != 1 
+                                      AND (estatus_pago != 2 OR estatus_pago IS NULL)
+                                 THEN (monto_valor - COALESCE(condonacion_parcial_monto, 0)) 
+                                      - COALESCE(monto_parcial_pagado, 0)
+                                 ELSE 0
+                             END
+                         ), 
+                     0) AS monto_total,
+                 
+                     SUM(
+                         CASE 
+                             WHEN condonado = 1 THEN 1 
+                             ELSE 0 
+                         END
+                     ) AS condonados,
+                 
+                     SUM(
+                         CASE 
+                             WHEN condonado != 1 
+                                  AND (estatus_pago != 2 OR estatus_pago IS NULL)
+                             THEN 1 
+                             ELSE 0 
+                         END
+                     ) AS pendientes
+                 
+                 FROM gastos_cobranza
+                 WHERE Id_credito = %s
                 """
                 cursor.execute(query_resumen, (id_credito,))
                 row_bd = cursor.fetchone()
